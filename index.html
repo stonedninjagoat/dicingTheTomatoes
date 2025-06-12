@@ -1,1 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Rhythmic Pattern Extractor</title>
+</head>
+<body>
+  <h2>Rhythmic Pattern Extractor Tool</h2>
+  <input type="file" id="csvFile" accept=".csv" />
+  <div>
+    <label>Min Motif Length: <input type="number" id="minLength" value="2" /></label>
+    <label>Max Motif Length: <input type="number" id="maxLength" value="6" /></label>
+    <label>Min Frequency: <input type="number" id="minCount" value="2" /></label>
+    <label>Min Significance: <input type="number" step="0.0001" id="minSignificance" value="0.01" /></label>
+  </div>
+  <button onclick="processCSV()">Process CSV</button>
+  <button onclick="findMotifs()">Find Motifs (n-grams)</button>
+  <button onclick="downloadPatterns()">Download Patterns CSV</button>
+
+  <pre id="output"></pre>
+
+<script>
+  let globalBeats = [];
+  let motifStats = [];
+  let uploadedFileName = null;
+
+  // Parses CSV and returns array of beats (floats)
+  function parseCSV(text) {
+    const lines = text.trim().split('\n');
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const beatsIndex = headers.findIndex(h => h === 'beats');
+
+    if (beatsIndex === -1) {
+      alert('CSV must contain a "Beats" column.');
+      throw new Error('Missing "Beats" column in CSV');
+    }
+
+    return lines.slice(1).map(line => {
+      const parts = line.split(',');
+      const val = parseFloat(parts[beatsIndex]);
+      if (isNaN(val)) throw new Error('Invalid beat value: ' + parts[beatsIndex]);
+      return val;
+    });
+  }
+
+  function processCSV() {
+    const fileInput = document.getElementById('csvFile');
+    const output = document.getElementById('output');
+
+    if (!fileInput.files.length) {
+      alert('Please upload a CSV file first.');
+      return;
+    }
+
+    uploadedFileName = fileInput.files[0].name.replace(/\.[^/.]+$/, "");
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        globalBeats = parseCSV(e.target.result);
+        output.textContent = `Loaded Beats (${globalBeats.length} values):\n` + globalBeats.join(', ');
+        motifStats = [];
+      } catch (err) {
+        output.textContent = 'Error processing CSV: ' + err.message;
+        console.error(err);
+      }
+    };
+
+    reader.readAsText(fileInput.files[0]);
+  }
+
+  function findMotifs() {
+    const output = document.getElementById('output');
+
+    if (!globalBeats.length) {
+      alert('Please process a CSV file first.');
+      return;
+    }
+
+    const minCount = parseInt(document.getElementById('minCount').value, 10);
+    const minLength = parseInt(document.getElementById('minLength').value, 10);
+    const maxLength = parseInt(document.getElementById('maxLength').value, 10);
+    const minSignificance = parseFloat(document.getElementById('minSignificance').value);
+
+    if (minLength > maxLength) {
+      alert('Min Motif Length cannot be greater than Max Motif Length.');
+      return;
+    }
+
+    const motifMap = new Map();
+
+    for (let n = minLength; n <= maxLength; n++) {
+      for (let i = 0; i <= globalBeats.length - n; i++) {
+        const slice = globalBeats.slice(i, i + n);
+        // For rhythms, allow repeated durations, so no skipping zero or duplicates here
+        // But you could add filters if desired
+        const gram = slice.join(',');
+        motifMap.set(gram, (motifMap.get(gram) || 0) + 1);
+      }
+    }
+
+    const totalLength = globalBeats.length;
+
+    motifStats = [...motifMap.entries()]
+      .map(([pattern, count]) => {
+        const length = pattern.split(',').length;
+        // significance: (count * length) / total beats length (like before)
+        const significance = (count * length) / totalLength;
+        return { pattern, count, length, significance };
+      })
+      .filter(m => m.count >= minCount && m.significance >= minSignificance)
+      .sort((a, b) => b.significance - a.significance);
+
+    if (!motifStats.length) {
+      output.textContent += `\n\nNo motifs found with the given filters.`;
+      return;
+    }
+
+    const motifsOutput = motifStats.map(m =>
+      `Motif: [${m.pattern}] | Count: ${m.count} | Length: ${m.length} | Significance: ${m.significance.toFixed(4)}`
+    ).join('\n');
+
+    output.textContent += `\n\nMotifs (freq >= ${minCount}, significance >= ${minSignificance}):\n${motifsOutput}`;
+  }
+
+  function downloadPatterns() {
+    if (!motifStats.length) {
+      alert('No motifs to export.');
+      return;
+    }
+
+    let csv = `Motif,Count,Length,Significance\n`;
+    csv += motifStats.map(m =>
+      `"${m.pattern}",${m.count},${m.length},${m.significance.toFixed(4)}`
+    ).join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${uploadedFileName || 'patterns'}_rhythmic_motifs.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+</script>
+</body>
+</html>
 
