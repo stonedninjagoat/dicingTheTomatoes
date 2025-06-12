@@ -17,6 +17,7 @@
   <button onclick="findMotifs()">Find Rhythmic Motifs (n-grams)</button>
   <button onclick="generateRhythm()">Generate Predictive Rhythm</button>
   <button onclick="downloadPatterns()">Download Motifs CSV</button>
+  <button onclick="downloadGeneratedRhythm()">Download Generated Rhythm CSV</button>
 
   <pre id="output"></pre>
 
@@ -209,6 +210,24 @@
       const a = document.createElement('a');
       a.href = url;
       a.download = `${uploadedFileName || 'rhythm_patterns'}_motifs.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function downloadGeneratedRhythm() {
+      if (!lastGeneratedRhythm.length) {
+        alert('No generated rhythm available. Please generate rhythm first.');
+        return;
+      }
+
+      let csv = 'Beats\n';
+      csv += lastGeneratedRhythm.map(v => v.toFixed(4)).join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${uploadedFileName || 'generated_rhythm'}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     }
